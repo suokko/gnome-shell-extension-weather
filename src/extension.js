@@ -51,6 +51,8 @@ const GLib = imports.gi.GLib;
 const Gtk = imports.gi.Gtk;
 const Pango = imports.gi.Pango;
 const EXTENSIONDIR = Me.dir.get_path();
+const NMClient = imports.gi.NMClient;
+const NetworkManager = imports.gi.NetworkManager;
 
 // Settings
 const WEATHER_SETTINGS_SCHEMA = 'org.gnome.shell.extensions.weather';
@@ -89,7 +91,13 @@ const WEATHER_DEBUG_EXTENSION = 'debug-extension';			// Weather extension settin
 		this.variation("comment_in_panel");
 		this.variation("clock_format");
 		this.variation("wind_direction");
-		this.variation("debug");									this.status("Initialized GWeather");
+		this.variation("debug");
+		this._nmclient = null;
+		/* Assume connected until NMClient gives better info */
+		this._connected = true;
+		this.status("Initialized GWeather");
+
+		NMClient.Client.new_async(null, Lang.bind(this, this._nmclientready));
 
 		let menuAlignment = 0.25;
 			if (Clutter.get_default_text_direction() == Clutter.TextDirection.RTL)
@@ -99,6 +107,36 @@ const WEATHER_DEBUG_EXTENSION = 'debug-extension';			// Weather extension settin
 		this.initUI();
 		this.start();
 		return 0;
+		},
+
+		_nmclientready : function(obj, result)
+		{
+			this._nmclient = NMClient.Client.new_finish(result);
+
+			this._nmclient.connect('notify::state', Lang.bind(this, this._updateconnectionstate));
+			this._nmclient.connect('notify::manager-running', Lang.bind(this, this._updateconnectionstate));
+			this._updateconnectionstate();
+			this.status("Initialized NMClient");
+		},
+
+		_updateconnectionstate : function()
+		{
+			let state = this._nmclient.state;
+			if (!this._nmclient.manager_running) {
+				this._connected = true;
+				return;
+			}
+			this._connected = state == NetworkManager.State.CONNECTED_SITE ||
+					  state == NetworkManager.State.CONNECTED_LOCAL ||
+					  state == NetworkManager.State.CONNECTED_GLOBAL;
+			if (this._connected) {
+				this.status("Internet connection available");
+				if (this.info) {
+					this.info.update();
+				}
+			} else {
+				this.status("No internet connection");
+			}
 		},
 
 		variation : function(variable,keep)
@@ -175,7 +213,7 @@ const WEATHER_DEBUG_EXTENSION = 'debug-extension';			// Weather extension settin
 
 		this.refreshUI();
 
-			if(this.city_name)
+			if(this.city_name && this._connected)
 			{
 			this.info.update();
 			}											this.status("Weather started"); this.status(0);
@@ -619,7 +657,7 @@ const WEATHER_DEBUG_EXTENSION = 'debug-extension';			// Weather extension settin
 		this.rebuildLocationSelectorItem();								this.status("Location selector builded");
 
 		this.UI.reloadButton = new PopupMenu.PopupMenuItem(_("Reload Weather Information"));
-		this.UI.reloadButton.connect('activate', Lang.bind(this, function(){this.info.update();}));
+		this.UI.reloadButton.connect('activate', Lang.bind(this, function(){if (this._connected) this.info.update();}));
 		this.menu.addMenuItem(this.UI.reloadButton);
 		this.UI.reloadButton.actor.hide();
 
