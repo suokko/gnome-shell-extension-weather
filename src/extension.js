@@ -657,7 +657,19 @@ const WEATHER_DEBUG_EXTENSION = 'debug-extension';			// Weather extension settin
 		this.rebuildLocationSelectorItem();								this.status("Location selector builded");
 
 		this.UI.reloadButton = new PopupMenu.PopupMenuItem(_("Reload Weather Information"));
-		this.UI.reloadButton.connect('activate', Lang.bind(this, function(){if (this._connected) this.info.update();}));
+		this.UI.reloadButton.connect('activate', Lang.bind(this, function()
+					{
+						if (this._connected) {
+							this.info.update();
+						} else {
+							let menu = imports.ui.main.panel.statusArea.network.menu;
+							menu.toggle();
+							if (menu.isOpen) {
+								menu.actor.navigate_focus(null, Gtk.DirectionType.TAB_FORWARD, false);
+							}
+
+						}
+					}));
 		this.menu.addMenuItem(this.UI.reloadButton);
 		this.UI.reloadButton.actor.hide();
 
